@@ -1,0 +1,192 @@
+homeassistant:
+  # Name of the location where Home Assistant is running
+  name: Home
+  # Location required to calculate the time the sun rises and sets
+  latitude: __redacted__
+  longitude: __redacted__
+  # Impacts weather/sunrise data
+  elevation: __redacted__
+  # metric for Metric, imperial for Imperial
+  unit_system: imperial
+  # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+  time_zone: America/Chicago
+
+  customize:
+    binary_sensor.se_motion_sensor_sensor_2:
+      friendly_name: SE Motion Sensor
+    binary_sensor.nw_motion_sensor_sensor_6:
+      friendly_name: NW Motion Sensor
+
+# Enables the frontend
+frontend:
+
+http:
+  # Uncomment this to add a password (recommended!)
+  # api_password: PASSWORD
+
+# Checks for available updates
+updater:
+
+# Enables support for tracking state changes over time.
+history:
+
+# View all events in a logbook
+logbook:
+
+notify me:
+  - platform: pushover
+    api_key: "__redacted__"
+    user_key: "__redacted__"
+    name: pushover
+  - platform: smtp
+    name: emailer
+    server: smtp.gmail.com
+    port: 587
+    sender: __redacted__
+    starttls: true
+    username: __redacted__
+    password: __redacted__
+    recipient: __redacted__
+
+zwave:
+  usb_path: /dev/ttyUSB-ZStick-5G
+  config_path: /srv/hass/hass_venv/lib/python3.4/site-packages/libopenzwave-0.3.1-py3.4-linux-armv7l.egg/config/
+  polling_interval: 60000
+
+device_tracker:
+  - platform: ddwrt
+    host: __redacted__
+    username: __redacted__
+    password: __redacted__
+    interval_seconds: 12
+    consider_home: 180
+    track_new_devices: False
+
+sensor:
+  - platform: template
+    sensors:
+      se_motion_sensor_battery:
+        value_template: '{{ states.binary_sensor.se_motion_sensor_sensor_2.attributes.battery_level }}'
+        unit_of_measurement: '%'
+        friendly_name: "SE Motion Sensor Battery"
+  - platform: template
+    sensors:
+      nw_motion_sensor_battery:
+        value_template: '{{ states.binary_sensor.nw_motion_sensor_sensor_6.attributes.battery_level }}'
+        unit_of_measurement: '%'
+        friendly_name: "NW Motion Sensor Battery"
+  - platform: template
+    sensors:
+      fdlock_battery:
+        value_template: '{{ states.lock.front_door_lock_locked_4.attributes.battery_level }}'
+        unit_of_measurement: '%'
+        friendly_name: "Front Door Lock Battery"
+
+camera:
+  - platform: generic
+    still_image_url: http://__redacted__/webcapture.jpg?command=snap&channel=1
+    name: "Front Door Camera"
+
+shell_command:
+  snapshot: 'wget "http://__redacted__/webcapture.jpg?command=snap&channel=1" -O {{filename}}'
+
+script:
+  burglar:
+    alias: Burglar Alarm
+    sequence:
+      - service: shell_command.snapshot
+        data:
+          filename: /home/hass/snapshot1.jpg
+      - delay:
+          seconds: 1
+      - service: shell_command.snapshot
+        data:
+          filename: /home/hass/snapshot2.jpg
+      - delay:
+          seconds: 1
+      - service: shell_command.snapshot
+        data:
+          filename: /home/hass/snapshot3.jpg
+      - delay:
+          seconds: 1
+      - service: shell_command.snapshot
+        data:
+          filename: /home/hass/snapshot4.jpg
+      - delay:
+          seconds: 1
+      - service: shell_command.snapshot
+        data:
+          filename: /home/hass/snapshot5.jpg
+      - delay:
+          seconds: 1
+      - service: notify.emailer
+        data:
+          title: 'Intruder alert!'
+          message: 'Intruder alert!'
+          data:
+            images:
+              - /home/hass/snapshot1.jpg
+              - /home/hass/snapshot2.jpg
+              - /home/hass/snapshot3.jpg
+              - /home/hass/snapshot4.jpg
+              - /home/hass/snapshot5.jpg
+
+automation:
+  - alias: SE Motion Alarm
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.se_motion_sensor_sensor_2
+        from: 'off'
+        to: 'on'
+    condition:
+      - condition: state
+        entity_id: group.all_devices
+        state: 'not_home'
+    action:
+      - service: notify.pushover
+        data:
+          title: "SW Motion Sensor Alarm"
+          message: "Motion detected in SW corner of the living room."
+      - service: script.burglar
+  - alias: NW Motion Alarm
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.nw_motion_sensor_sensor_6
+        from: 'off'
+        to: 'on'
+    condition:
+      - condition: state
+        entity_id: group.all_devices
+        state: 'not_home'
+    action:
+      - service: notify.pushover
+        data:
+          title: "NW Motion Sensor Alarm"
+          message: "Motion detected in NW corner of the living room."
+      - service: script.burglar
+  - alias: Front Door Alarm
+    trigger:
+      - platform: state
+        entity_id: lock.front_door_lock_locked_4
+        to: 'unlocked'
+    condition:
+      - condition: state
+        entity_id: group.all_devices
+        state: 'not_home'
+    action:
+      service: notify.pushover
+      data:
+        title: "Front Door Unlocked"
+        message: "Front door was unlocked."
+  - alias: soft reset at 2:30am
+    trigger:
+      platform: time
+      after: '2:30:00'
+    action:
+      service: zwave.soft_reset
+  - alias: heal at 2:31am
+    trigger:
+      - platform: time
+        after: '2:31:00'
+    action:
+      service: zwave.heal_network
