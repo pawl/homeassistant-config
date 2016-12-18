@@ -2,30 +2,29 @@ homeassistant:
   # Name of the location where Home Assistant is running
   name: Home
   # Location required to calculate the time the sun rises and sets
-  latitude: __redacted__
-  longitude: __redacted__
+  latitude: !secret latitude
+  longitude: !secret longitude
   # Impacts weather/sunrise data
-  elevation: __redacted__
+  elevation: !secret elevation
   # metric for Metric, imperial for Imperial
   unit_system: imperial
   # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   time_zone: America/Chicago
 
   customize:
-    binary_sensor.se_motion_sensor_sensor_2:
+    binary_sensor.sw_motion_sensor_sensor_2_0:
       friendly_name: SE Motion Sensor
-    binary_sensor.nw_motion_sensor_sensor_6:
+    binary_sensor.nw_motion_sensor_sensor_6_0:
       friendly_name: NW Motion Sensor
 
 # Enables the frontend
 frontend:
 
 http:
-  # Uncomment this to add a password (recommended!)
-  # api_password: PASSWORD
 
 # Checks for available updates
 updater:
+  reporting: no
 
 # Enables support for tracking state changes over time.
 history:
@@ -35,18 +34,21 @@ logbook:
 
 notify me:
   - platform: pushover
-    api_key: "__redacted__"
-    user_key: "__redacted__"
+    api_key: !secret pushover_api_key
+    user_key: !secret pushover_user_key
     name: pushover
   - platform: smtp
     name: emailer
     server: smtp.gmail.com
     port: 587
-    sender: __redacted__
+    sender: !secret email_username
     starttls: true
-    username: __redacted__
-    password: __redacted__
-    recipient: __redacted__
+    username: !secret email_username
+    password: !secret email_password
+    recipient: !secret email_recipient
+
+climate:
+  platform: zwave
 
 zwave:
   usb_path: /dev/ttyUSB-ZStick-5G
@@ -55,9 +57,9 @@ zwave:
 
 device_tracker:
   - platform: ddwrt
-    host: __redacted__
-    username: __redacted__
-    password: __redacted__
+    host: !secret ddwrt_host
+    username: !secret ddwrt_username
+    password: !secret ddwrt_password
     interval_seconds: 12
     consider_home: 180
     track_new_devices: False
@@ -66,34 +68,38 @@ sensor:
   - platform: template
     sensors:
       se_motion_sensor_battery:
-        value_template: '{{ states.binary_sensor.se_motion_sensor_sensor_2.attributes.battery_level }}'
+        value_template: '{{ states.binary_sensor.sw_motion_sensor_sensor_2_0.attributes.battery_level }}'
         unit_of_measurement: '%'
         friendly_name: "SE Motion Sensor Battery"
   - platform: template
     sensors:
       nw_motion_sensor_battery:
-        value_template: '{{ states.binary_sensor.nw_motion_sensor_sensor_6.attributes.battery_level }}'
+        value_template: '{{ states.binary_sensor.nw_motion_sensor_sensor_6_0.attributes.battery_level }}'
         unit_of_measurement: '%'
         friendly_name: "NW Motion Sensor Battery"
   - platform: template
     sensors:
       fdlock_battery:
-        value_template: '{{ states.lock.front_door_lock_locked_4.attributes.battery_level }}'
+        value_template: '{{ states.lock.front_door_lock_locked_4_0.attributes.battery_level }}'
         unit_of_measurement: '%'
         friendly_name: "Front Door Lock Battery"
 
 camera:
-  - platform: generic
-    still_image_url: http://__redacted__/webcapture.jpg?command=snap&channel=1
+  - platform: amcrest
+    host: !secret camera_host
+    username: !secret camera_username
+    password: !secret camera_password
     name: "Front Door Camera"
 
 shell_command:
-  snapshot: 'wget "http://__redacted__/webcapture.jpg?command=snap&channel=1" -O {{filename}}'
+  snapshot: !secret snapshot_template
 
 script:
   burglar:
     alias: Burglar Alarm
     sequence:
+      - delay:
+          seconds: 1
       - service: shell_command.snapshot
         data:
           filename: /home/hass/snapshot1.jpg
@@ -135,7 +141,7 @@ automation:
   - alias: SE Motion Alarm
     trigger:
       - platform: state
-        entity_id: binary_sensor.se_motion_sensor_sensor_2
+        entity_id: binary_sensor.sw_motion_sensor_sensor_2_0
         from: 'off'
         to: 'on'
     condition:
@@ -151,7 +157,7 @@ automation:
   - alias: NW Motion Alarm
     trigger:
       - platform: state
-        entity_id: binary_sensor.nw_motion_sensor_sensor_6
+        entity_id: binary_sensor.nw_motion_sensor_sensor_6_0
         from: 'off'
         to: 'on'
     condition:
@@ -167,7 +173,7 @@ automation:
   - alias: Front Door Alarm
     trigger:
       - platform: state
-        entity_id: lock.front_door_lock_locked_4
+        entity_id: lock.front_door_lock_locked_4_0
         to: 'unlocked'
     condition:
       - condition: state
@@ -177,7 +183,7 @@ automation:
       service: notify.pushover
       data:
         title: "Front Door Unlocked"
-        message: "Front door was unlocked."
+        message: "Front door was unlocked without your phone on the network."
   - alias: soft reset at 2:30am
     trigger:
       platform: time
